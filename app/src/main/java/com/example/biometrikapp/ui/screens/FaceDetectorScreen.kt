@@ -43,6 +43,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.biometrikapp.api.RetrofitClient
 import com.example.biometrikapp.ui.BiometricViewModel
 import com.example.biometrikapp.ui.ScanState
 import com.example.biometrikapp.utils.FaceAnalyzer
@@ -74,13 +75,16 @@ fun FaceDetectorScreen(
         if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
     }
 
+    // --- LOGIKA ANALYZER YANG MENDUKUNG KAMERA DEPAN/BELAKANG & ROTASI DINAMIS ---
     val analyzer = remember {
-        FaceAnalyzer { bitmap, isValid, message ->
+        FaceAnalyzer { bitmap, rotation, isValid, message ->
             isFaceInsideFrame = isValid
             faceStatusMessage = message
 
+            // Hanya proses gambar jika dalam state Scanning
             if (isValid && scanState is ScanState.Scanning) {
-                viewModel.processFaceImage(context, bitmap)
+                // Rotation dikirim ke ViewModel untuk postRotate sesuai orientasi sensor (Front/Back)
+                viewModel.processFaceImage(context, bitmap, rotation)
             }
         }
     }
@@ -103,29 +107,37 @@ fun FaceDetectorScreen(
     LaunchedEffect(lensFacing, hasCameraPermission) {
         if (hasCameraPermission) {
             val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
-            val cameraProvider = cameraProviderFuture.get()
+            cameraProviderFuture.addListener({
+                val cameraProvider = cameraProviderFuture.get()
 
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-            val imageAnalysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build().also {
-                it.setAnalyzer(Executors.newSingleThreadExecutor(), analyzer)
-            }
-            val cameraSelector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
+                val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
 
-            try {
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+                val imageAnalysis = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    // Mengikuti standar industri untuk deteksi wajah real-time
+                    .build().also {
+                        it.setAnalyzer(Executors.newSingleThreadExecutor(), analyzer)
+                    }
+
+                // Menggunakan lensFacing dinamis (bisa diganti Front/Back)
+                val cameraSelector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
+
+                try {
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }, ContextCompat.getMainExecutor(context))
         }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (hasCameraPermission) {
-            // 1. Layer Kamera
+            // 1. Layer Preview Kamera
             AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
 
-            // 2. Layer Overlay Gelap untuk KYC Style
+            // 2. Layer Overlay KYC (Oval Area)
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val canvasWidth = size.width
                 val canvasHeight = size.height
@@ -160,7 +172,7 @@ fun FaceDetectorScreen(
                 )
             }
 
-            // 3. UI Kontrol Utama (Header & Instruksi)
+            // 3. UI Header & Instruksi
             Column(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 40.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -174,7 +186,13 @@ fun FaceDetectorScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
                     }
                     Text("Liveness Check", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    IconButton(onClick = { lensFacing = if (lensFacing == CameraSelector.LENS_FACING_FRONT) CameraSelector.LENS_FACING_BACK else CameraSelector.LENS_FACING_FRONT }, modifier = Modifier.background(Color.Black.copy(0.4f), CircleShape)) {
+                    IconButton(
+                        onClick = {
+                            lensFacing = if (lensFacing == CameraSelector.LENS_FACING_FRONT)
+                                CameraSelector.LENS_FACING_BACK else CameraSelector.LENS_FACING_FRONT
+                        },
+                        modifier = Modifier.background(Color.Black.copy(0.4f), CircleShape)
+                    ) {
                         Icon(Icons.Default.Cameraswitch, "Switch Camera", tint = Color.White)
                     }
                 }
@@ -197,7 +215,7 @@ fun FaceDetectorScreen(
                 }
             }
 
-            // 4. Layer Bottom Sheet (Hasil Verifikasi)
+            // 4. Result Bottom Sheet
             AnimatedVisibility(
                 visible = scanState is ScanState.Success || scanState is ScanState.Error,
                 enter = slideInVertically { it } + fadeIn(),
@@ -220,13 +238,12 @@ fun FaceDetectorScreen(
                         if (scanState is ScanState.Success) {
                             val user = scanState.user
 
-                            // --- BAGIAN YANG DIUBAH: MENAMPILKAN FOTO PROFIL ---
                             Box(contentAlignment = Alignment.Center) {
                                 if (!user.foto_profil.isNullOrEmpty()) {
-                                    // Pastikan base URL sesuai dengan ngrok/server kamu
-                                    val baseUrl = "https://hippological-kina-brimfully.ngrok-free.dev/"
-                                    // Replace backslash (\) ke slash (/) jika ada perbedaan path dari windows/linux backend
-                                    val imageUrl = baseUrl + user.foto_profil.replace("\\", "/")
+                                    // PENGAMANAN URL: Mencegah terjadinya double slash (//) antara BASE_URL dan nama file
+                                    val safeBaseUrl = RetrofitClient.BASE_URL.trimEnd('/')
+                                    val safePath = user.foto_profil.replace("\\", "/").trimStart('/')
+                                    val imageUrl = "$safeBaseUrl/$safePath"
 
                                     AsyncImage(
                                         model = imageUrl,
@@ -238,7 +255,6 @@ fun FaceDetectorScreen(
                                         contentScale = ContentScale.Crop
                                     )
                                 } else {
-                                    // Fallback jika user tidak punya foto profil
                                     Box(
                                         modifier = Modifier
                                             .size(90.dp)
@@ -251,7 +267,6 @@ fun FaceDetectorScreen(
                                     }
                                 }
 
-                                // Badge Centang Hijau di pojok kanan bawah foto
                                 Icon(
                                     Icons.Default.CheckCircle,
                                     contentDescription = "Sukses",
@@ -263,22 +278,24 @@ fun FaceDetectorScreen(
                                         .background(Color.White, CircleShape)
                                 )
                             }
-                            // ---------------------------------------------------
 
                             Spacer(modifier = Modifier.height(16.dp))
                             Text("Verifikasi Berhasil", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF152A53))
                             Spacer(modifier = Modifier.height(8.dp))
                             Text("Akses sistem diizinkan untuk:", fontSize = 14.sp, color = Color.Gray)
-                            Text(user.nama_lengkap, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+
+                            // Menyesuaikan dengan properti baru (nama_penduduk)
+                            val namaTampil = user.nama_penduduk ?: user.nama_lengkap ?: "Tanpa Nama"
+                            Text(namaTampil, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
 
                             Spacer(modifier = Modifier.height(24.dp))
 
                             Column(modifier = Modifier.fillMaxWidth().background(Color(0xFFF8F9FA), RoundedCornerShape(12.dp)).padding(16.dp)) {
                                 KycDetailRow("NIK", user.nik)
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFFE0E0E0))
-                                KycDetailRow("Gender", user.jenis_kelamin)
+                                KycDetailRow("Gender", user.jenis_kelamin ?: "-")
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFFE0E0E0))
-                                KycDetailRow("TTL", "${user.tempat_lahir}, ${user.tanggal_lahir}")
+                                KycDetailRow("TTL", "${user.tempat_lahir ?: "-"}, ${user.tanggal_lahir ?: "-"}")
                             }
 
                             Spacer(modifier = Modifier.height(32.dp))

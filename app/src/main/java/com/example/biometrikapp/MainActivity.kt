@@ -172,7 +172,6 @@ class MainActivity : FragmentActivity() {
         }
 
         override fun captureError(e: FingerprintException) {
-            // Capture error sering terjadi jika jari diangkat terlalu cepat, jangan matikan koneksi, cukup log saja
             Log.e(TAG, "Capture Error: ${e.message}")
         }
 
@@ -260,12 +259,10 @@ fun AppNavigation(
             onStartFaceScan = { currentScreen = "face_detector" },
             onNavigateToRegister = { currentScreen = "register" },
             onStartFingerprintScan = {
-                // Reset memori sisa sebelum masuk scanner
                 onResetHardwareData()
                 currentScreen = "fingerprint_scanner"
             },
             onNavigateToFingerprintRegister = {
-                // Reset memori sisa sebelum masuk registrasi
                 onResetHardwareData()
                 currentScreen = "fingerprint_register"
             }
@@ -296,7 +293,7 @@ fun AppNavigation(
             onBack = { currentScreen = "dashboard" },
             onConnect = onConnectRequest,
             onResultFound = { user ->
-                selectedUser = user // User bisa berisi Data atau null
+                selectedUser = user
                 currentScreen = "fingerprint_result"
             }
         )

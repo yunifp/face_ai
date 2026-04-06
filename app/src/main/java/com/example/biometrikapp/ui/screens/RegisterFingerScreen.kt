@@ -1,65 +1,99 @@
 package com.example.biometrikapp.ui.screens
 
-import android.content.Intent
+import android.annotation.SuppressLint
 import android.graphics.Bitmap
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.biometrikapp.api.FingerprintRequest
 import com.example.biometrikapp.api.RetrofitClient
+import com.example.biometrikapp.api.UserData
 import com.example.biometrikapp.utils.toBase64String
-import com.example.biometrikapp.utils.toPart
 import com.zkteco.android.biometric.module.fingerprintreader.ZKFingerService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.asRequestBody
-import java.io.File
-import java.io.FileOutputStream
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import androidx.compose.ui.graphics.SolidColor
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterFingerScreen(
@@ -70,31 +104,17 @@ fun RegisterFingerScreen(
     onBack: () -> Unit,
     onConnect: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val api = RetrofitClient.instance
     val context = LocalContext.current
 
     var currentStep by remember { mutableIntStateOf(0) }
-    var registeredUserId by remember { mutableStateOf<Int?>(null) }
     var isLoading by remember { mutableStateOf(false) }
 
-    // Biodata Form
-    var nik by remember { mutableStateOf("") }
-    var nama by remember { mutableStateOf("") }
-    var jk by remember { mutableStateOf("Laki-laki") }
-    var tempat by remember { mutableStateOf("") }
-    var tgl by remember { mutableStateOf("") }
-    var alamat by remember { mutableStateOf("") }
-
-    // State Upload Foto
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        imageUri = uri
-    }
-
-    // State DatePicker
-    var showDatePicker by remember { mutableStateOf(false) }
-    val datePickerState = rememberDatePickerState()
+    // State untuk Pencarian Penduduk (Sama seperti Register Wajah)
+    var usersList by remember { mutableStateOf<List<UserData>>(emptyList()) }
+    var selectedUser by remember { mutableStateOf<UserData?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var expandedDropdown by remember { mutableStateOf(false) }
 
     val fingers = listOf(
         1 to "Jempol Kiri", 2 to "Telunjuk Kiri", 3 to "Jari Tengah Kiri", 4 to "Jari Manis Kiri", 5 to "Kelingking Kiri",
@@ -109,20 +129,32 @@ fun RegisterFingerScreen(
     var scanStatus by remember { mutableStateOf("Siap memindai...") }
     var lastCaptureTime by remember { mutableLongStateOf(0L) }
 
+    // Fetch data users saat screen dimuat
+    LaunchedEffect(Unit) {
+        try {
+            val response = RetrofitClient.instance.getAllUsers()
+            if (response.success && response.data != null) {
+                usersList = response.data
+            }
+        } catch (e: Exception) {
+            // Abaikan atau log error jika gagal fetch
+        }
+    }
+
     suspend fun saveToServer(finalTemp: ByteArray) {
-        if (registeredUserId == null) return
+        if (selectedUser == null) return
         try {
             isLoading = true
             val base64Template = finalTemp.toBase64String()
             val response = api.saveFingerprint(
-                userId = registeredUserId!!,
+                userId = selectedUser!!.id, // Menggunakan ID dari user yang dipilih
                 request = FingerprintRequest(selectedFingerId, selectedFingerName, base64Template)
             )
 
             withContext(Dispatchers.Main) {
                 if (response.success) {
                     Toast.makeText(context, "Sidik Jari $selectedFingerName Tersimpan!", Toast.LENGTH_SHORT).show()
-                    currentStep = 1
+                    currentStep = 1 // Kembali ke menu pilih jari
                     enrollTemplates.clear()
                 } else {
                     scanStatus = "Gagal Simpan: ${response.message}"
@@ -143,6 +175,7 @@ fun RegisterFingerScreen(
         if (currentStep == 2 && capturedTemplate != null && !isLoading) {
             val currentTime = System.currentTimeMillis()
 
+            // Jeda 1 detik agar alat membaca dengan stabil
             if (currentTime - lastCaptureTime > 1000) {
                 lastCaptureTime = currentTime
                 val currentTemp = capturedTemplate.clone()
@@ -175,32 +208,28 @@ fun RegisterFingerScreen(
 
     BackHandler { if (currentStep > 0) currentStep-- else onBack() }
 
-    // Dialog Pemilih Tanggal
-    if (showDatePicker) {
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                        tgl = formatter.format(Date(millis))
-                    }
-                    showDatePicker = false
-                }) { Text("Pilih", color = Color(0xFF152A53), fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Batal", color = Color.Gray) }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
+    val customTextFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = Color(0xFF152A53), unfocusedBorderColor = Color(0xFFE0E0E0),
+        focusedLabelColor = Color(0xFF152A53), unfocusedLabelColor = Color.Gray,
+        cursorColor = Color(0xFF152A53), focusedContainerColor = Color.White, unfocusedContainerColor = Color(0xFFFDFDFD)
+    )
 
     Scaffold(
         topBar = {
             Surface(shadowElevation = 8.dp, color = Color(0xFF152A53)) {
                 TopAppBar(
-                    title = { Text("Registrasi Biometrik", fontWeight = FontWeight.Bold, color = Color.White) },
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Fingerprint, null, tint = Color(0xFF2EA8FF), modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = buildAnnotatedString {
+                                    withStyle(style = SpanStyle(color = Color.White)) { append("Vote") }
+                                    withStyle(style = SpanStyle(color = Color(0xFF2EA8FF))) { append("Now") }
+                                }, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, letterSpacing = 1.sp
+                            )
+                        }
+                    },
                     navigationIcon = {
                         IconButton(onClick = { if (currentStep > 0) currentStep-- else onBack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
@@ -211,19 +240,22 @@ fun RegisterFingerScreen(
             }
         }
     ) { padding ->
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(Color(0xFFF8F9FA), Color(0xFFE9ECEF)))) // Gradient senada dengan Home
+                .background(Brush.verticalGradient(listOf(Color(0xFFF8F9FA), Color(0xFFE9ECEF))))
                 .padding(padding)
         ) {
+            val screenWidth = maxWidth
+            val contentWidthModifier = if (screenWidth > 700.dp) Modifier.widthIn(max = 750.dp).align(Alignment.TopCenter) else Modifier.fillMaxSize()
+
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
+                modifier = contentWidthModifier
                     .padding(16.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // Notifikasi Alat Terputus
                 if (!isConnected && currentStep > 0) {
                     Card(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -240,166 +272,158 @@ fun RegisterFingerScreen(
 
                 when (currentStep) {
                     0 -> {
-                        Text("Langkah 1: Biodata & Foto", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF152A53), letterSpacing = 0.5.sp)
-                        Spacer(Modifier.height(24.dp))
-
-                        // Box Foto Profil Senada
-                        Box(
-                            modifier = Modifier
-                                .size(130.dp)
-                                .shadow(8.dp, CircleShape)
-                                .clip(CircleShape)
-                                .background(Color.White)
-                                .clickable { galleryLauncher.launch("image/*") },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (imageUri != null) {
-                                AsyncImage(model = imageUri, contentDescription = "Foto Profil", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                            } else {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(32.dp))
-                                    Spacer(Modifier.height(4.dp))
-                                    Text("Upload Foto", textAlign = TextAlign.Center, color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                }
-                            }
+                        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth()) {
+                            Text("Pendaftaran Sidik Jari", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = Color(0xFF152A53))
+                            Text("Cari data penduduk lalu rekam biometrik jari", fontSize = 14.sp, color = Color.Gray)
                         }
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(16.dp))
 
+                        // --- CARD PENCARIAN NIK ---
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            elevation = CardDefaults.cardElevation(8.dp),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = if (screenWidth > 600.dp) 24.dp else 0.dp),
+                            shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(4.dp)
                         ) {
-                            Column(Modifier.padding(20.dp).animateContentSize()) {
-                                OutlinedTextField(
-                                    value = nik, onValueChange = { if (it.length <= 16) nik = it },
-                                    label = { Text("NIK (16 Digit)") }, modifier = Modifier.fillMaxWidth(),
-                                    leadingIcon = { Icon(Icons.Default.Badge, null, tint = Color(0xFF1976D2)) },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                Spacer(Modifier.height(16.dp))
-                                OutlinedTextField(
-                                    value = nama, onValueChange = { nama = it },
-                                    label = { Text("Nama Lengkap") }, modifier = Modifier.fillMaxWidth(),
-                                    leadingIcon = { Icon(Icons.Default.Person, null, tint = Color(0xFF1976D2)) },
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                Spacer(Modifier.height(16.dp))
+                            Column(modifier = Modifier.padding(24.dp)) {
+                                ExposedDropdownMenuBox(
+                                    expanded = expandedDropdown,
+                                    onExpandedChange = { expandedDropdown = !expandedDropdown }
+                                ) {
+                                    OutlinedTextField(
+                                        value = searchQuery,
+                                        onValueChange = {
+                                            searchQuery = it
+                                            expandedDropdown = true
+                                            if (selectedUser != null && it != selectedUser?.nik) {
+                                                selectedUser = null
+                                            }
+                                        },
+                                        label = { Text("Ketik atau Pilih NIK Penduduk") },
+                                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        leadingIcon = { Icon(Icons.Default.Search, null, tint = Color(0xFF152A53)) },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
+                                        colors = customTextFieldColors,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true
+                                    )
 
-                                // PERBAIKAN RADIO BUTTON: Dibuat layout column rapi ke bawah dan dibungkus row
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    Text("Jenis Kelamin", fontSize = 14.sp, color = Color.DarkGray, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp, start = 4.dp))
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { jk = "Laki-laki" }) {
-                                            RadioButton(selected = jk == "Laki-laki", onClick = { jk = "Laki-laki" }, colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF1E88E5)))
-                                            Text("Laki-laki", fontSize = 14.sp)
-                                        }
-                                        Spacer(modifier = Modifier.width(24.dp))
-                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { jk = "Perempuan" }) {
-                                            RadioButton(selected = jk == "Perempuan", onClick = { jk = "Perempuan" }, colors = RadioButtonDefaults.colors(selectedColor = Color(0xFF1E88E5)))
-                                            Text("Perempuan", fontSize = 14.sp)
+                                    val filteredUsers = usersList.filter { it.nik.contains(searchQuery, ignoreCase = true) }
+                                    if (filteredUsers.isNotEmpty() && expandedDropdown) {
+                                        ExposedDropdownMenu(
+                                            expanded = true,
+                                            onDismissRequest = { expandedDropdown = false },
+                                            modifier = Modifier.background(Color.White).fillMaxWidth()
+                                        ) {
+                                            filteredUsers.take(7).forEach { user ->
+                                                DropdownMenuItem(
+                                                    text = { Text("${user.nik} - ${user.nama_penduduk ?: "Tanpa Nama"}") },
+                                                    onClick = {
+                                                        searchQuery = user.nik
+                                                        selectedUser = user
+                                                        expandedDropdown = false
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
+                            }
+                        }
 
-                                Spacer(Modifier.height(16.dp))
-                                OutlinedTextField(
-                                    value = tempat, onValueChange = { tempat = it },
-                                    label = { Text("Tempat Lahir") }, modifier = Modifier.fillMaxWidth(),
-                                    leadingIcon = { Icon(Icons.Default.LocationOn, null, tint = Color(0xFF1976D2)) },
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                Spacer(Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                                // PERBAIKAN TANGGAL: Menggunakan Box penangkap klik untuk memunculkan DatePicker
-                                Box(modifier = Modifier.fillMaxWidth()) {
-                                    OutlinedTextField(
-                                        value = tgl, onValueChange = { },
-                                        label = { Text("Tgl Lahir (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth(),
-                                        leadingIcon = { Icon(Icons.Default.DateRange, null, tint = Color(0xFF1976D2)) },
-                                        readOnly = true, // Readonly agar keyboard tidak muncul
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                                    // Surface transparan menutupi textfield agar bisa di-klik memanggil kalender
-                                    Surface(
-                                        modifier = Modifier.matchParentSize().clickable { showDatePicker = true },
-                                        color = Color.Transparent
-                                    ) {}
+                        // --- CARD DETAIL PENDUDUK (READ-ONLY) ---
+                        AnimatedVisibility(visible = selectedUser != null) {
+                            if (selectedUser != null) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = if (screenWidth > 600.dp) 24.dp else 0.dp),
+                                    shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(4.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(24.dp)) {
+                                        Text("Detail Penduduk", fontWeight = FontWeight.Bold, color = Color(0xFF152A53), fontSize = 16.sp)
+                                        Spacer(modifier = Modifier.height(16.dp))
+
+                                        Row(verticalAlignment = Alignment.Top) {
+                                            // Foto Profil
+                                            Box(modifier = Modifier.size(80.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFE0E0E0)), contentAlignment = Alignment.Center) {
+                                                if (!selectedUser!!.foto_profil.isNullOrEmpty()) {
+                                                    val safeBaseUrl = RetrofitClient.BASE_URL.trimEnd('/')
+                                                    val safePath = selectedUser!!.foto_profil!!.replace("\\", "/").trimStart('/')
+                                                    val imageUrl = "$safeBaseUrl/$safePath"
+
+                                                    AsyncImage(
+                                                        model = imageUrl,
+                                                        contentDescription = "Foto Profil",
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Crop
+                                                    )
+                                                } else {
+                                                    Icon(Icons.Default.Person, null, tint = Color.Gray, modifier = Modifier.size(40.dp))
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.width(16.dp))
+
+                                            // Info Penduduk
+                                            Column {
+                                                Text(selectedUser!!.nama_penduduk ?: "-", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                                Text("NIK: ${selectedUser!!.nik}", color = Color.Gray, fontSize = 14.sp)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text("${selectedUser!!.tempat_lahir ?: "-"}, ${selectedUser!!.tanggal_lahir ?: "-"}", fontSize = 13.sp)
+                                                Text("Gender: ${selectedUser!!.jenis_kelamin ?: "-"}", fontSize = 13.sp)
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        HorizontalDivider(color = Color(0xFFE0E0E0))
+                                        Spacer(modifier = Modifier.height(16.dp))
+
+                                        Text("Alamat Lengkap", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                        Text(selectedUser!!.alamat ?: "-", fontSize = 14.sp)
+                                        Text("RT/RW: ${selectedUser!!.rt ?: "-"}/${selectedUser!!.rw ?: "-"}", fontSize = 14.sp, color = Color.DarkGray)
+                                        Text("Desa: ${selectedUser!!.nama_desa ?: "-"}, Kec: ${selectedUser!!.nama_kec ?: "-"}", fontSize = 14.sp, color = Color.DarkGray)
+                                        Text("Kab/Kota: ${selectedUser!!.nama_kab ?: "-"}, Prov: ${selectedUser!!.nama_pro ?: "-"}", fontSize = 14.sp, color = Color.DarkGray)
+                                    }
                                 }
-
-                                Spacer(Modifier.height(16.dp))
-                                OutlinedTextField(
-                                    value = alamat, onValueChange = { alamat = it },
-                                    label = { Text("Alamat Lengkap") }, modifier = Modifier.fillMaxWidth(), minLines = 3,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
                             }
                         }
 
                         Spacer(Modifier.height(24.dp))
-                        // Tombol Bergaya Senada
+
+                        // Tombol Lanjut ke Pilih Jari
                         Button(
                             onClick = {
-                                scope.launch {
-                                    isLoading = true
-                                    try {
-                                        var fotoPart: MultipartBody.Part? = null
-                                        if (imageUri != null) {
-                                            val resolver = context.contentResolver
-                                            val file = File(context.cacheDir, "temp_profile.jpg")
-                                            val inputStream = resolver.openInputStream(imageUri!!)
-                                            val outputStream = FileOutputStream(file)
-                                            inputStream?.copyTo(outputStream)
-                                            val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
-                                            fotoPart = MultipartBody.Part.createFormData("foto_profil", file.name, requestFile)
-                                        }
-
-                                        val res = api.registerUserProfile(nik.toPart(), nama.toPart(), jk.toPart(), tempat.toPart(), tgl.toPart(), alamat.toPart(), fotoPart)
-                                        if (res.success) {
-                                            registeredUserId = res.data?.id
-                                            currentStep = 1
-                                        } else {
-                                            Toast.makeText(context, res.message, Toast.LENGTH_SHORT).show()
-                                        }
-                                    } catch (e: Exception) { Toast.makeText(context, "Koneksi ke Server Gagal", Toast.LENGTH_SHORT).show() }
-                                    finally { isLoading = false }
+                                if (selectedUser != null) {
+                                    currentStep = 1
+                                } else {
+                                    Toast.makeText(context, "Pilih NIK Penduduk terlebih dahulu!", Toast.LENGTH_SHORT).show()
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth().height(55.dp),
-                            contentPadding = PaddingValues(0.dp), // Reset padding agar gradient full
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = if (screenWidth > 600.dp) 24.dp else 0.dp).height(55.dp),
                             shape = RoundedCornerShape(24.dp),
-                            enabled = !isLoading && nik.length == 16 && nama.isNotEmpty() && tempat.isNotEmpty() && tgl.isNotEmpty() && alamat.isNotEmpty()
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF152A53))
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        if (!isLoading && nik.length == 16 && nama.isNotEmpty() && tempat.isNotEmpty() && tgl.isNotEmpty() && alamat.isNotEmpty())
-                                            Brush.horizontalGradient(listOf(Color(0xFF43A047), Color(0xFF2E7D32))) // Hijau senada
-                                        else SolidColor(Color.LightGray)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                else Text("Simpan Profil & Lanjut", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
-                            }
+                            Text("LANJUT REKAM JARI", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.White)
                         }
                         Spacer(Modifier.height(24.dp))
                     }
 
                     1 -> {
-                        Text("Langkah 2: Pilih Jari", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = Color(0xFF152A53))
-                        Text("ID Sistem: $registeredUserId", color = Color.Gray, fontSize = 12.sp)
+                        Text("Pilih Jari yang Akan Direkam", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = Color(0xFF152A53))
+                        Text("Penduduk: ${selectedUser?.nama_penduduk}", color = Color.Gray, fontSize = 14.sp)
                         Spacer(Modifier.height(16.dp))
 
-                        LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.height(420.dp)) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(if (screenWidth > 600.dp) 3 else 2),
+                            modifier = Modifier.height(if (screenWidth > 600.dp) 300.dp else 450.dp)
+                        ) {
                             items(fingers) { (id, name) ->
                                 Card(
                                     colors = CardDefaults.cardColors(containerColor = Color.White),
                                     shape = RoundedCornerShape(16.dp),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                                     modifier = Modifier.padding(8.dp).clickable {
                                         selectedFingerId = id
                                         selectedFingerName = name
@@ -425,27 +449,14 @@ fun RegisterFingerScreen(
 
                         Button(
                             onClick = {
-                                Toast.makeText(context, "Pendaftaran Selesai. Memuat ulang aplikasi...", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Selesai Merekam Jari", Toast.LENGTH_SHORT).show()
                                 onRegisterComplete()
-
-                                val packageManager = context.packageManager
-                                val intent = packageManager.getLaunchIntentForPackage(context.packageName)
-                                val componentName = intent?.component
-                                val restartIntent = Intent.makeRestartActivityTask(componentName)
-
-                                context.startActivity(restartIntent)
-                                Runtime.getRuntime().exit(0)
                             },
-                            modifier = Modifier.fillMaxWidth().height(55.dp),
-                            contentPadding = PaddingValues(0.dp),
-                            shape = RoundedCornerShape(24.dp)
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = if (screenWidth > 600.dp) 24.dp else 0.dp).height(55.dp),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5))
                         ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF1E88E5), Color(0xFF1565C0)))), // Biru senada
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Selesai Pendaftaran User", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            }
+                            Text("SELESAI", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
                     }
 
@@ -477,9 +488,9 @@ fun RegisterFingerScreen(
                             colors = CardDefaults.cardColors(containerColor = Color.White),
                             shape = RoundedCornerShape(16.dp),
                             elevation = CardDefaults.cardElevation(4.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = if (screenWidth > 600.dp) 24.dp else 0.dp)
                         ) {
-                            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Column(modifier = Modifier.padding(20.dp).animateContentSize(), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
                                     text = scanStatus, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold,
                                     color = if (isLoading) Color(0xFF1976D2) else if (scanStatus.contains("Gagal")) Color.Red else Color.DarkGray,
@@ -499,7 +510,7 @@ fun RegisterFingerScreen(
                         Spacer(modifier = Modifier.height(40.dp))
                         OutlinedButton(
                             onClick = { enrollTemplates.clear(); currentStep = 1 },
-                            modifier = Modifier.fillMaxWidth().height(55.dp),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = if (screenWidth > 600.dp) 24.dp else 0.dp).height(55.dp),
                             shape = RoundedCornerShape(24.dp),
                             border = BorderStroke(1.5.dp, Color(0xFF152A53))
                         ) {

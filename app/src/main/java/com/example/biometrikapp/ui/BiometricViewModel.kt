@@ -3,6 +3,7 @@ package com.example.biometrikapp.ui
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -29,18 +30,22 @@ class BiometricViewModel : ViewModel() {
     var scanState by mutableStateOf<ScanState>(ScanState.Scanning)
         private set
 
+    private val TAG = "BiometricVM"
+
     fun resetScan() {
         scanState = ScanState.Scanning
     }
 
-    fun processFaceImage(context: Context, bitmap: Bitmap, expectedNik: String? = null) {
+    // TERIMA ROTATION DEGREES DINAMIS DARI SENSOR
+    fun processFaceImage(context: Context, bitmap: Bitmap, rotationDegrees: Int, expectedNik: String? = null) {
         if (scanState is ScanState.Loading || scanState is ScanState.Success) return
         scanState = ScanState.Loading
 
         viewModelScope.launch {
             try {
+                // Rotasi Dinamis (Anti Miring di Tablet)
                 val matrix = Matrix()
-                matrix.postRotate(270f)
+                matrix.postRotate(rotationDegrees.toFloat())
                 val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 
                 val file = File(context.cacheDir, "face_capture.jpg")
@@ -70,8 +75,13 @@ class BiometricViewModel : ViewModel() {
                 } else {
                     scanState = ScanState.Error(response.message)
                 }
+            } catch (e: retrofit2.HttpException) {
+                val err = e.response()?.errorBody()?.string()
+                Log.e(TAG, "HTTP Error: $err")
+                scanState = ScanState.Error("Wajah tidak jelas atau posisi miring.")
             } catch (e: Exception) {
-                scanState = ScanState.Error("Wajah tidak jelas atau tidak terdaftar di sistem.")
+                Log.e(TAG, "Exception: ${e.message}")
+                scanState = ScanState.Error("Koneksi gagal atau wajah tidak terdaftar di sistem.")
             }
         }
     }

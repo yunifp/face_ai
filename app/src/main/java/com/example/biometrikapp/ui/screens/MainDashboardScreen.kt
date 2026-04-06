@@ -1,5 +1,6 @@
 package com.example.biometrikapp.ui.screens
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -40,14 +42,19 @@ import androidx.compose.ui.unit.sp
 import com.example.biometrikapp.api.RetrofitClient
 import kotlinx.coroutines.launch
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainDashboardScreen(
     onStartFaceScan: () -> Unit,
     onNavigateToRegister: () -> Unit,
     onStartFingerprintScan: () -> Unit,
-    onNavigateToFingerprintRegister: () -> Unit, // Parameter untuk pendaftaran jari baru
+    onNavigateToFingerprintRegister: () -> Unit,
 ) {
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val screenWidth = configuration.screenWidthDp.dp
+
     val transitionState = remember { MutableTransitionState(false).apply { targetState = true } }
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
@@ -62,7 +69,6 @@ fun MainDashboardScreen(
             isServerOnline = null
             try {
                 val response = RetrofitClient.instance.checkConnection()
-                // Karena checkConnection mengembalikan StandardResponse<Any>
                 isServerOnline = response.success
             } catch (_: Exception) {
                 isServerOnline = false
@@ -108,14 +114,10 @@ fun MainDashboardScreen(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     actions = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(end = 16.dp).clip(RoundedCornerShape(8.dp)).clickable { }.padding(4.dp)
-                            ) {
+                        IconButton(onClick = { /* Help */ }) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.AutoMirrored.Outlined.HelpOutline, contentDescription = null, tint = Color.White)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text("Help", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                                Text("Help", fontSize = 9.sp, color = Color.White)
                             }
                         }
                     }
@@ -123,33 +125,40 @@ fun MainDashboardScreen(
             }
         }
     ) { paddingValues ->
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Brush.verticalGradient(listOf(Color(0xFFF8F9FA), Color(0xFFE9ECEF))))
                 .padding(paddingValues)
         ) {
+            val maxWidth = maxWidth
+            // Penyesuaian konten agar tidak terlalu lebar di Tablet
+            val contentModifier = if (maxWidth > 600.dp) {
+                Modifier.widthIn(max = 700.dp).align(Alignment.TopCenter)
+            } else {
+                Modifier.fillMaxSize()
+            }
+
             AnimatedVisibility(
                 visibleState = transitionState,
                 enter = fadeIn(tween(800)) + slideInVertically(initialOffsetY = { 100 }, animationSpec = tween(800, easing = FastOutSlowInEasing))
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-
                     PullToRefreshBox(
                         isRefreshing = isRefreshing,
                         onRefresh = { checkServerConnection() },
                         modifier = Modifier.weight(1f).fillMaxWidth()
                     ) {
                         Column(
-                            modifier = Modifier
+                            modifier = contentModifier
                                 .fillMaxSize()
-                                .padding(horizontal = 24.dp)
+                                .padding(horizontal = if (maxWidth > 600.dp) 40.dp else 24.dp)
                                 .verticalScroll(scrollState),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(if (isLandscape) 16.dp else 24.dp))
 
-                            // --- SECTION 1: FACE RECOGNITION (PROFIL & WAJAH) ---
+                            // --- SECTION 1: FACE RECOGNITION ---
                             SectionHeader(
                                 title = "Face Recognition",
                                 icon = Icons.Outlined.Face,
@@ -158,7 +167,10 @@ fun MainDashboardScreen(
                                 pulseScale = pulseScale
                             )
 
-                            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                                horizontalArrangement = Arrangement.spacedBy(if (maxWidth > 600.dp) 24.dp else 16.dp)
+                            ) {
                                 AnimatedActionCard(
                                     modifier = Modifier.weight(1f),
                                     title = "USER\nREGISTRATION",
@@ -192,7 +204,10 @@ fun MainDashboardScreen(
                                 pulseScale = pulseScale
                             )
 
-                            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
+                                horizontalArrangement = Arrangement.spacedBy(if (maxWidth > 600.dp) 24.dp else 16.dp)
+                            ) {
                                 AnimatedActionCard(
                                     modifier = Modifier.weight(1f),
                                     title = "REGISTER NEW\nFINGER",
@@ -202,7 +217,7 @@ fun MainDashboardScreen(
                                     contentColor = Color.White,
                                     isPrimary = true,
                                     badgeTint = Color(0xFF1B5E20),
-                                    onClick = onNavigateToFingerprintRegister // Terhubung ke RegisterFingerScreen
+                                    onClick = onNavigateToFingerprintRegister
                                 )
                                 AnimatedActionCard(
                                     modifier = Modifier.weight(1f),
@@ -213,7 +228,7 @@ fun MainDashboardScreen(
                                     contentColor = Color(0xFF388E3C),
                                     isPrimary = false,
                                     badgeTint = Color(0xFF43A047),
-                                    onClick = onStartFingerprintScan // Terhubung ke FingerprintScannerScreen
+                                    onClick = onStartFingerprintScan
                                 )
                             }
                         }
@@ -228,7 +243,7 @@ fun MainDashboardScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 16.dp),
+                                .padding(vertical = if (isLandscape) 8.dp else 16.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -244,14 +259,14 @@ fun MainDashboardScreen(
                                 null -> "CHECKING CONNECTION..."
                             }
 
-                            Box(modifier = Modifier.size(10.dp).background(statusColor, CircleShape))
+                            Box(modifier = Modifier.size(8.dp).background(statusColor, CircleShape))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = buildAnnotatedString {
                                     withStyle(style = SpanStyle(color = Color.Gray)) { append("Status: ") }
                                     withStyle(style = SpanStyle(color = statusColor, fontWeight = FontWeight.Bold)) { append(statusText) }
                                 },
-                                fontSize = 11.sp
+                                fontSize = 10.sp
                             )
                         }
                     }
@@ -268,12 +283,12 @@ fun SectionHeader(title: String, icon: ImageVector, iconTint: Color, bgColors: L
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
     ) {
         Row(
-            modifier = Modifier.background(Brush.horizontalGradient(bgColors)).padding(vertical = 14.dp),
+            modifier = Modifier.background(Brush.horizontalGradient(bgColors)).padding(vertical = 12.dp),
             horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.scale(pulseScale))
+            Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp).scale(pulseScale))
             Spacer(modifier = Modifier.width(12.dp))
-            Text(title, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF152A53), letterSpacing = 0.5.sp)
+            Text(title, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF152A53), letterSpacing = 0.5.sp)
         }
     }
 }
@@ -283,14 +298,18 @@ fun AnimatedActionCard(
     modifier: Modifier = Modifier, title: String, icon: ImageVector, badgeIcon: ImageVector,
     containerColors: List<Color>, contentColor: Color, isPrimary: Boolean, badgeTint: Color, onClick: () -> Unit
 ) {
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.92f else 1f, tween(150), label = "")
-    val elevation by animateFloatAsState(if (isPressed) 2f else 12f, tween(150), label = "")
+    val scale by animateFloatAsState(if (isPressed) 0.94f else 1f, tween(150), label = "")
+    val elevation by animateFloatAsState(if (isPressed) 2f else 8.dp.value, tween(150), label = "")
 
     Card(
         modifier = modifier
-            .aspectRatio(0.80f)
+            // Rasio aspek disesuaikan jika landscape agar tidak terlalu tinggi
+            .aspectRatio(if (isLandscape) 1.2f else 0.85f)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .shadow(elevation.dp, RoundedCornerShape(24.dp), spotColor = if (isPrimary) containerColors.first() else Color.Gray)
             .clip(RoundedCornerShape(24.dp))
@@ -298,16 +317,37 @@ fun AnimatedActionCard(
         shape = RoundedCornerShape(24.dp), border = if (!isPrimary) BorderStroke(1.5.dp, Color(0xFFE0E0E0)) else null
     ) {
         Box(modifier = Modifier.fillMaxSize().background(Brush.linearGradient(containerColors))) {
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
                 Box {
-                    Icon(imageVector = icon, contentDescription = null, tint = if (isPrimary) Color.White else contentColor, modifier = Modifier.size(68.dp))
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = if (isPrimary) Color.White else contentColor,
+                        modifier = Modifier.size(if (isLandscape) 48.dp else 56.dp)
+                    )
                     Icon(
                         imageVector = badgeIcon, contentDescription = null, tint = badgeTint,
-                        modifier = Modifier.align(Alignment.BottomEnd).size(24.dp).background(Color.White, CircleShape).padding(if (isPrimary) 3.dp else 1.dp)
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(20.dp)
+                            .background(Color.White, CircleShape)
+                            .padding(if (isPrimary) 2.dp else 1.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(20.dp))
-                Text(text = title, color = contentColor, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, fontSize = 14.sp, letterSpacing = 1.sp, lineHeight = 20.sp)
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = title,
+                    color = contentColor,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    fontSize = 12.sp,
+                    letterSpacing = 0.5.sp,
+                    lineHeight = 16.sp
+                )
             }
         }
     }

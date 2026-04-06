@@ -76,7 +76,7 @@ fun FingerprintResultScreen(
                 contentAlignment = Alignment.TopCenter
             ) {
                 if (isRecognized) {
-                    SuccessResultContent(user!!)
+                    SuccessResultContent(user)
                 } else {
                     ErrorResultContent()
                 }
@@ -131,13 +131,15 @@ private fun SuccessResultContent(user: UserData) {
 
         Spacer(Modifier.height(20.dp))
 
-        Text(
-            text = user.nama_lengkap,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = PrimaryBlue,
-            textAlign = TextAlign.Center
-        )
+        user.nama_lengkap?.let {
+            Text(
+                text = it,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = PrimaryBlue,
+                textAlign = TextAlign.Center
+            )
+        }
         Text(
             text = "NIK: ${user.nik}",
             fontSize = 16.sp,
