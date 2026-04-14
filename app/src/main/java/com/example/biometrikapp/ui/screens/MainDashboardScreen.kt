@@ -59,9 +59,15 @@ fun MainDashboardScreen(
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
 
+    // --- STATE UNTUK NOTIFIKASI SNACKBAR ---
+    val snackbarHostState = remember { SnackbarHostState() }
+
     // --- SETUP KONEKSI & REFRESH ---
     var isServerOnline by remember { mutableStateOf<Boolean?>(null) }
     var isRefreshing by remember { mutableStateOf(false) }
+
+    // --- STATE UNTUK SYNC DATA ---
+    var isSyncing by remember { mutableStateOf(false) }
 
     fun checkServerConnection() {
         scope.launch {
@@ -74,6 +80,26 @@ fun MainDashboardScreen(
                 isServerOnline = false
             } finally {
                 isRefreshing = false
+            }
+        }
+    }
+
+    // --- FUNGSI TRIGGER SYNC ---
+    fun triggerSyncData() {
+        if (isSyncing) return
+        scope.launch {
+            isSyncing = true
+            try {
+                val response = RetrofitClient.instance.triggerSync()
+                if (response.success) {
+                    snackbarHostState.showSnackbar("✅ Sync Berhasil!")
+                } else {
+                    snackbarHostState.showSnackbar("❌ Sync Gagal: ${response.message}")
+                }
+            } catch (e: Exception) {
+                snackbarHostState.showSnackbar("⚠️ Kesalahan koneksi saat Sync")
+            } finally {
+                isSyncing = false
             }
         }
     }
@@ -91,6 +117,7 @@ fun MainDashboardScreen(
     )
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             Surface(shadowElevation = 8.dp, color = Color(0xFF152A53)) {
                 TopAppBar(
@@ -231,6 +258,74 @@ fun MainDashboardScreen(
                                     onClick = onStartFingerprintScan
                                 )
                             }
+
+                            // --- SECTION 3: SYNC DATABASE CARD ---
+                            val syncInteractionSource = remember { MutableInteractionSource() }
+                            val isSyncPressed by syncInteractionSource.collectIsPressedAsState()
+                            val syncScale by animateFloatAsState(if (isSyncPressed) 0.96f else 1f, tween(150), label = "")
+                            val syncElevation by animateFloatAsState(if (isSyncPressed) 2f else 8.dp.value, tween(150), label = "")
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(72.dp)
+                                    .graphicsLayer { scaleX = syncScale; scaleY = syncScale }
+                                    .shadow(syncElevation.dp, RoundedCornerShape(20.dp), spotColor = Color(0xFF152A53))
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .clickable(
+                                        interactionSource = syncInteractionSource,
+                                        indication = null,
+                                        enabled = !isSyncing,
+                                        onClick = { triggerSyncData() }
+                                    ),
+                                shape = RoundedCornerShape(20.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Brush.horizontalGradient(listOf(Color(0xFF152A53), Color(0xFF1E3A70))))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (isSyncing) {
+                                            CircularProgressIndicator(
+                                                color = Color.White,
+                                                modifier = Modifier.size(24.dp),
+                                                strokeWidth = 2.5.dp
+                                            )
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Text(
+                                                text = "Menyinkronkan Data...",
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.Sync,
+                                                contentDescription = "Sync",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(28.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(16.dp))
+                                            Text(
+                                                text = "SYNC DATABASE",
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color.White,
+                                                letterSpacing = 1.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // SPACING EXTRA AGAR LAYOUT TIDAK KEPOTONG DI BAWAH (KHUSUSNYA TABLET)
+                            Spacer(modifier = Modifier.height(48.dp))
                         }
                     }
 

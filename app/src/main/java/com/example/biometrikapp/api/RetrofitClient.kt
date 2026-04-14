@@ -102,11 +102,14 @@ interface ApiService {
 
     @GET("finger/all-fingerprints")
     suspend fun getAllFingerprints(): StandardResponse<List<FingerprintTemplateData>>
+
+    @POST("sync/trigger")
+    suspend fun triggerSync(): StandardResponse<Any>
 }
 
 // --- CLIENT SETUP ---
 object RetrofitClient {
-    const val BASE_URL = "https://hippological-kina-brimfully.ngrok-free.dev"
+    const val BASE_URL = "https://votenow.hitungsuara.id/biometrik/"
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
